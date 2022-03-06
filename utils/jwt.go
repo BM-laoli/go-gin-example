@@ -7,7 +7,7 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 )
 
-var jwtSecret = []byte(setting.JwtSecret)
+var jwtSecret = []byte(setting.AppSetting.JwtSecret)
 
 type Claims struct {
 	Username string `json:"username"`
@@ -20,7 +20,7 @@ func GenerateToken(username, password string) (string, error) {
 	nowTime := time.Now()
 	expireTime := nowTime.Add(3 * time.Hour) // 设置过期时间
 
-	claims := Claims{ // 准备把信息签名
+	claims := Claims{ // 准备把信息签名 jwt-go 提供
 		username,
 		password,
 		jwt.StandardClaims{

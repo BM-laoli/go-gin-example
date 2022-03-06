@@ -1,0 +1,35 @@
+// package
+
+// import (
+// 	"log"
+// 	"time"
+
+// 	"github.com/BM-laoli/go-gin-example/models"
+// 	"github.com/robfig/cron"
+// )
+
+// func Setup() {
+// 	log.Println("Starting...")
+
+// 	c := cron.New() //新开一个Job
+
+// 	c.AddFunc("0 0 12 * * ? *", func() { // 定时跑一个job任务 每天12:00 执行一次 这个job
+// 		log.Println("Run models.CleanAllTag...")
+// 		models.CleanAllTag()
+// 	})
+// 	c.AddFunc("0 0 12 * * ? *", func() {
+// 		log.Println("Run models.CleanAllArticle...")
+// 		models.CleanAllArticle()
+// 	})
+
+// 	c.Start()
+
+// 	t1 := time.NewTimer(time.Second * 10) // 这是一个定时器，在你设定的时间之后先 channel 发一个消息
+// 	for {
+// 		select {
+// 		case <-t1.C:
+// 			// 直接额重置定时器，重新跑job
+// 			t1.Reset(time.Second * 10)
+// 		}
+// 	}
+// }

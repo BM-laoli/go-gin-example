@@ -29,9 +29,17 @@ const (
 	FATAL
 )
 
-func init() {
-	filePath := getLogFileFullPath()
-	F = openLogFile(filePath)
+// 主要是初始化一个 记录系统日志相关的 函数用来收集和向 本地文件写入收集到的错误
+// 获取文件写入文件 文件创建使用了os库
+func Setup() {
+	var err error
+	filePath := getLogFilePath()
+	fileName := getLogFileName()
+	F, err = openLogFile(fileName, filePath)
+
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	logger = log.New(F, DefaultPrefix, log.LstdFlags)
 }
