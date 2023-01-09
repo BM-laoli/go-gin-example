@@ -1,0 +1,7 @@
+[ERROR][jwt.go:34]2023/01/03 22:40:17 [token is expired by 309h29m10s]
+[INFO][auth_service.go:35]2023/01/03 22:40:36 [错误 --->%!(EXTRA map[string]interface {}=map[name:admin password:admin])]
+[INFO][auth_service.go:37]2023/01/03 22:40:36 [获取到的用户是 findUser--->%!(EXTRA models.Auth={2 admin $2a$04$bWATxaZowNCQtqfzyoQm/eOw4t33hUg1G5heImWMT7KjnfVcZMqZ2})]
+[ERROR][jwt.go:34]2023/01/03 22:40:51 [token is expired by 309h29m44s]
+[ERROR][jwt.go:34]2023/01/03 22:41:11 [token is expired by 309h30m4s]
+[ERROR][jwt.go:34]2023/01/03 22:41:51 [<nil>]
+[ERROR][jwt.go:34]2023/01/03 22:41:54 [<nil>]
