@@ -1,4 +1,6 @@
-# 环境说明
+> 这个分支下，我们会在主线上和煎鱼大神的go-grpc保持一致，然后会新开一些 小店，参照最新的文档和库(2023.1.12)来做补充说明和记录📝，具体的内容，和细枝末节，这里不会过多展开，煎鱼的blog 说的也比较的完善了。
+
+# 环境说明(校准文档1)
 
 > 首先是安装，protobuf 的过程和配置 本地开发环境变量
 
@@ -105,3 +107,23 @@ type SearchService struct {
  pb.SearchServiceServer
 }
 ```
+
+# gRPC Streaming, Client and Server
+
+1. 三种传输方式
+
+```proto
+service StreamService {
+// List：服务器端流式 RPC
+// Record：客户端流式 RPC
+// Route：双向流式 RPC
+    rpc List(StreamRequest) returns (stream StreamResponse) {};
+
+    rpc Record(stream StreamRequest) returns (StreamResponse) {};
+
+    rpc Route(stream StreamRequest) returns (stream StreamResponse) {};
+}
+```
+
+本章节，没有说明其他要说明的，就是简单的说一些三种stream 传输的简单使用，以及它们的使用场景
+ 
