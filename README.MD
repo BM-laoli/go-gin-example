@@ -110,6 +110,8 @@ type SearchService struct {
 
 # gRPC Streaming, Client and Server
 
+> 这里主要说吗，三种不同的数据传输方式比，一方用流 一方不用，或双方都用
+
 1. 三种传输方式
 
 ```proto
@@ -126,4 +128,26 @@ service StreamService {
 ```
 
 本章节，没有说明其他要说明的，就是简单的说一些三种stream 传输的简单使用，以及它们的使用场景
- 
+
+# 基于CA的TLS证书
+
+> 前面的set debug 怎么能上生产呢？这是不可以的，所以我们需要加CA, 由于历史问题 ，以及煎鱼大神的blog 上这篇文章发布在2018年，现在我写这篇文章，已经上2023年，我们需要对照 grpc 官方来看, grpc 官方 + 煎鱼
+
+这里有篇 [CSDN](https://blog.csdn.net/weixin_41335923/article/details/124250753)的 解读，还算不错的
+
+grpc 官方的一个 ca 脚本生成器，我直接拿过来了 （注意你需要cv它们的 .conf 文件，并且你要有一定的知识，对你TAL，可以参考下面的一片文章）
+
+[OpenSSL openssl.cnf](https://blog.csdn.net/wzfgd/article/details/109805158)
+
+[create_ca.sh](https://github.com/grpc/grpc-go/blob/master/examples/data/x509/create.sh)
+
+[这篇文章有错误，在实践的时候代码对不上的，也不知道它怎么敢发，但是理论内容可以看看](https://blog.csdn.net/scarificed/article/details/126184422)
+
+grpc 官方 例子，[grcp-官方TSL例子](https://github.com/grpc/grpc-go/tree/master/examples/features/encryption)。里面的mTSL 就是于我们对应的内容
+
+# Unary and Stream interceptor 拦截器
+>
+> 这个东西相对的简单，没有什么坑，这里就不展开说明了，请直接去看 官方文档，和煎鱼的文章就好了
+[jainyuBlog](https://eddycjy.com/posts/go/grpc/2018-10-10-interceptor/),  [go-grpc-middleware](https://github.com/grpc-ecosystem/go-grpc-middleware)
+
+多说一句 interceptor 和 middleware 的关系，我们可以用 Nest的工程来举例子，这里有一个我认为还是不错的文章 供你参考 [Nest项目结构中的各个部分](https://blog.csdn.net/lxy869718069/article/details/103960790)，当然我认为这不是绝对的顺序，有时候它取决你的 设计的，假设你的设计中  你把 interceptor 和 middleware 换了个位置。那么这个时候应该与你自己的有关
