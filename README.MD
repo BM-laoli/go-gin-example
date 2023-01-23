@@ -151,3 +151,46 @@ grpc 官方 例子，[grcp-官方TSL例子](https://github.com/grpc/grpc-go/tree
 [jainyuBlog](https://eddycjy.com/posts/go/grpc/2018-10-10-interceptor/),  [go-grpc-middleware](https://github.com/grpc-ecosystem/go-grpc-middleware)
 
 多说一句 interceptor 和 middleware 的关系，我们可以用 Nest的工程来举例子，这里有一个我认为还是不错的文章 供你参考 [Nest项目结构中的各个部分](https://blog.csdn.net/lxy869718069/article/details/103960790)，当然我认为这不是绝对的顺序，有时候它取决你的 设计的，假设你的设计中  你把 interceptor 和 middleware 换了个位置。那么这个时候应该与你自己的有关
+
+# 同时提供http/https 服务
+
+> 核心步骤：判断 -> 转发 -> 响应。(注意 这只是一个简单的例子，并不完全符合生产标准)
+
+这了和煎鱼大神的博客有点点的区别，我们并没有提取一些公共的ca 工具方法，我们直接cv 了上一个commit 中的  server / client ，然后做了下面的修改
+
+```go
+
+//  这是一个 handle 请求处理函数 当有http请求来的时候会走到这里
+func GetHTTPServeMux() *http.ServeMux {
+ mux := http.NewServeMux()
+ mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+  w.Write([]byte("bm-laoli: go-inxxxxx"))
+ })
+ return mux
+}
+
+// 在原来的东西里面，判断一下就好了
+
+// 去掉 
+ // lis, err := net.Listen("tcp", ":"+PORT)
+ // if err != nil {
+ //  log.Fatalf("net.Listen err: %v", err)
+ // }
+ // server.Serve(lis)
+ 
+//  缓成下面的内容 主要是直接用http TLS 煎听 请求，然后分别转到grpc 和 http 请求上
+
+ http.ListenAndServeTLS(":"+PORT,
+  certFile,
+  keyFile,
+  http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+   if r.ProtoMajor == 2 && strings.Contains(r.Header.Get("Content-Type"), "application/grpc") {
+    server.ServeHTTP(w, r)
+   } else {
+    mux.ServeHTTP(w, r)
+   }
+
+   return
+  }),
+ )
+```
