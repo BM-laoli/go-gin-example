@@ -194,3 +194,214 @@ func GetHTTPServeMux() *http.ServeMux {
   }),
  )
 ```
+
+# 自定义验证
+>
+> 我们一步到位直接 用interceptor 封装一下
+
+1. 需要提前了解的知识点
+
+```go
+type PerRPCCredentials interface {
+    GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error)
+    RequireTransportSecurity() bool
+}
+
+// 这个是 gRPC 默认提供用于自定义认证的接口，它的作用是将所需的安全认证信息添加到每个 RPC 方法的上下文中
+// GetRequestMetadata：获取当前请求认证所需的元数据（metadata）
+// RequireTransportSecurity：是否需要基于 TLS 认证进行安全传输
+```
+
+2. 回到具体的操作上 我们还是cv一下 上一节的代码，然后做如下的修改
+
+```go
+// 第一 先改造 server
+
+++++
+const PORT = "9001"
+
+// 实现 PerRPCCredentials start
+type Auth struct {
+ AppKey    string
+ AppSecret string
+}
+
+func (a *Auth) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+ return map[string]string{"app_key": a.AppKey, "app_secret": a.AppSecret}, nil
+}
+
+func (a *Auth) RequireTransportSecurity() bool {
+ return true
+}
+
+func (a *Auth) Check(ctx context.Context) error {
+ md, ok := metadata.FromIncomingContext(ctx)
+ if !ok {
+  return status.Errorf(codes.Unauthenticated, "自定义认证 Token 失败")
+ }
+
+ var (
+  appKey    string
+  appSecret string
+ )
+ if value, ok := md["app_key"]; ok {
+  appKey = value[0]
+ }
+ if value, ok := md["app_secret"]; ok {
+  appSecret = value[0]
+ }
+
+ if appKey != a.GetAppKey() || appSecret != a.GetAppSecret() {
+  return status.Errorf(codes.Unauthenticated, "自定义认证 Token 无效")
+ }
+
+ return nil
+}
+
+type SearchService struct {
+ pb.SearchServiceServer
+ auth Auth
+}
+
+func (a *Auth) GetAppKey() string {
+ return a.AppKey
+}
+
+func (a *Auth) GetAppSecret() string {
+ return a.AppSecret
+}
+
+
+func CustomerAuth(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+
+ auth := Auth{
+  AppKey:    "bmlaoli",
+  AppSecret: "861795660",
+ }
+
+ //  if 如果头上有数据就成功
+ if err := auth.Check(ctx); err != nil {
+  log.Println("失败了")
+  return nil, err
+ }
+
+// 一定要 handler 哈 要不然就没法next 下去了
+ resp, err2 := handler(ctx, req)
+ if err2 != nil {
+  return nil, err2
+ }
+ return resp, err
+}
+
+
+// 实现 PerRPCCredentials end
+++++
+ opts := []grpc.ServerOption{
+  grpc.Creds(c),
+  grpc_middleware.WithUnaryServerChain(
+   RecoveryInterceptor,
+   LoggingInterceptor,
+   CustomerAuth, // 把这个自定义的 验证器 加上就好了
+  ),
+ }
+++++
+
+// 对于客户端也是一样的 
+// 实现 PerRPCCredentials start
+type Auth struct {
+ AppKey    string
+ AppSecret string
+}
+
+func (a *Auth) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+ return map[string]string{"app_key": a.AppKey, "app_secret": a.AppSecret}, nil
+}
+
+func (a *Auth) RequireTransportSecurity() bool {
+ return true
+}
+
+// 实现 PerRPCCredentials end
+
+func main() {
+  ++++
+ auth := Auth{
+  AppKey:    "bmlaoli",
+  AppSecret: "8617956603",
+ }
+  ++++
+//直接加一个 WithPerRPCCredentials
+ conn, err := grpc.Dial(":"+PORT, grpc.WithTransportCredentials(c), grpc.WithPerRPCCredentials(&auth))
+  ++++
+}
+
+```
+
+# gRPC Deadlines
+>
+> 主要就是设置一个 最终时间，到了就不让请求或者程序进行下去了，默认的grpc中 这个时间上有点长的（DEADLINE_EXCEEDED）。(煎鱼🐟的文章有点旧，但是并没过时 我们还是用他的文章来做)，我们直接看最新的 [官方文档](https://grpc.io/blog/deadlines/),  一个不错的博客的解析[link]( https://www.cnblogs.com/jiujuan/p/13499915.html )。
+
+```go
+// 设置一个deadline 主要是client 
+++++
+
+ ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Duration(5*time.Second)))
+ defer cancel()
+
+ //直接加一个 WithPerRPCCredentials
+ conn, err := grpc.Dial(":"+PORT, grpc.WithTransportCredentials(c), grpc.WithPerRPCCredentials(&auth))
+
+ if err != nil {
+  log.Fatalf("grpc.Dial err: %v", err)
+ }
+
+ defer conn.Close()
+
+ client := pb.NewSearchServiceClient(conn)
+ resp, err := client.Search(ctx, &pb.SearchRequest{
+  Request: "gRPC http",
+ })
+
+++++
+
+// 检查 deadline （client 和service 都要检查 ）
+++++Client
+ if err != nil {
+  statusErr, ok := status.FromError(err)
+  if ok {
+   if statusErr.Code() == codes.Canceled { // 检查 Canceled 字段
+    log.Fatalln("client.Search err: deadline")
+   }
+  }
+
+  log.Fatalf("client.Search err: %v", err)
+  return
+ }
+
+ log.Printf("resp: %s", resp.GetResponse())
+++++ service 
+   if ctx.Err() == context.Canceled {
+   return nil, status.Errorf(codes.Canceled, "SearchService.Search canceled")
+  }
+
+// 判断 deadline 之后的后续动作 （client 和 service ）这里不写了
+
+// 补充一段 让service sleep 的代码，以达到“time out " 目的 
++++++
+func (s *SearchService) Search(ctx context.Context, r *pb.SearchRequest) (*pb.SearchResponse, error) {
+
+ // 休眠 service 也要做time out 检查 这个检查就 看 Canceled 字段
+ for i := 0; i < 5; i++ {
+  if ctx.Err() == context.Canceled {
+   return nil, status.Errorf(codes.Canceled, "SearchService.Search canceled")
+  }
+
+  time.Sleep(1 * time.Second)
+ }
+
+ return &pb.SearchResponse{Response: r.GetRequest() + " Server!!!"}, nil
+}
+
+```
+
+# 分布式链路追踪 gRPC + Opentracing + Zipkin
