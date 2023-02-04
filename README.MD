@@ -405,3 +405,123 @@ func (s *SearchService) Search(ctx context.Context, r *pb.SearchRequest) (*pb.Se
 ```
 
 # 分布式链路追踪 gRPC + Opentracing + Zipkin
+
+> 煎鱼的文档有点点的旧 版本多多少少也有点 问题，安装它的文档是运行不起来的； 我们直接去 看下面这些内容
+<https://github.com/openzipkin/zipkin>，
+<https://pkg.go.dev/github.com/openzipkin/zipkin-go#section-readme>
+<https://pkg.go.dev/github.com/openzipkin-contrib/zipkin-go-opentracing>
+
+知乎文章，掘金文章
+<https://zhuanlan.zhihu.com/p/453190067>,
+<https://juejin.cn/post/7051874138877198344>
+
+1. docker 把 zipkin 平台运行起来 (过于简单这里不说了)
+
+2. 安装必要的依赖 到我们的程序中, 与 zipkin 平台进行集成
+
+> 重要的事情！！！ 一定一定要注意版本 v2！ 不是 v1 v1 你就400 了
+
+依赖是
+
+```go
+ import (
+    "github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
+    "github.com/opentracing/opentracing-go"
+    zipkinot "github.com/openzipkin-contrib/zipkin-go-opentracing"
+    "github.com/openzipkin/zipkin-go"
+    "github.com/openzipkin/zipkin-go/reporter"
+    httpreport "github.com/openzipkin/zipkin-go/reporter/http"
+    ++++
+  )
+```
+
+代码是
+
+```go
+// ---------------------------------server
+
+const (
+ serviceName        = "simple_zipkin_server"
+ zipkinAddr         = "http://127.0.0.1:9411/api/v2/spans"
+ zipkinRecorderAddr = "127.0.0.1:9001"
+)
+
+// 创建一个zipkin追踪器
+// url:http://localhost:9411/api/v2/spans
+// serviceName:服务名，Endpoint标记
+// hostPort：ip:port，Endpoint标记
+func NewZipkinTracer(url, serviceName, hostPort string) (*zipkin.Tracer, reporter.Reporter, error) {
+
+ // 初始化zipkin reporter
+ // reporter可以有很多种，如：logReporter、httpReporter，这里我们只使用httpReporter将span报告给http服务，也就是zipkin的http后台
+ r := httpreport.NewReporter(url)
+
+ //创建一个endpoint，用来标识当前服务，服务名：服务地址和端口
+ endpoint, err := zipkin.NewEndpoint(serviceName, hostPort)
+ if err != nil {
+  return nil, r, err
+ }
+
+ // 初始化追踪器 主要作用有解析span，解析上下文等
+ tracer, err := zipkin.NewTracer(r, zipkin.WithLocalEndpoint(endpoint))
+ if err != nil {
+  return nil, r, err
+ }
+
+ return tracer, r, nil
+}
+
+// zipkin start
+ tracer, r, err := NewZipkinTracer(zipkinAddr, serviceName, zipkinRecorderAddr)
+ defer r.Close()
+ if err != nil {
+  log.Println("tracking-<", err)
+  return
+ }
+ t := zipkinot.Wrap(tracer)
+ opentracing.SetGlobalTracer(t)
+ // zipkin end
+
+ opts := []grpc.ServerOption{
+  grpc.Creds(c),
+  // grpc.StatsHandler(zipkingrpc.NewServerHandler(tracer)),
+  grpc_middleware.WithUnaryServerChain(
+   RecoveryInterceptor,
+   LoggingInterceptor,
+   otgrpc.OpenTracingServerInterceptor(t, otgrpc.LogPayloads()),
+  ),
+ }
+
+// ---------------------------------client
+ // zipkin start
+ tracer, r, err := NewZipkinTracer(zipkinAddr, serviceName, zipkinRecorderAddr)
+ defer r.Close()
+ if err != nil {
+  log.Println("tracer %d", err)
+  return
+ }
+ t := zipkinot.Wrap(tracer)
+ opentracing.SetGlobalTracer(t)
+ // zipkin end
+
+   conn, err := grpc.Dial(":"+PORT, grpc.WithTransportCredentials(c),
+  grpc.WithUnaryInterceptor(
+   otgrpc.OpenTracingClientInterceptor(t, otgrpc.LogPayloads()),
+  ),
+ )
+
+// ---------------------------------其它说明
+// 特殊说明 实际上我们也 可以用官方 zipkin-go 文档中提到的 
+ opts := []grpc.ServerOption{
+  grpc.Creds(c),
+  grpc.StatsHandler(zipkingrpc.NewServerHandler(tracer)),
+  grpc_middleware.WithUnaryServerChain(
+   RecoveryInterceptor,
+   LoggingInterceptor,
+  ),
+ }
+
+   conn, err := grpc.Dial(":"+PORT,
+     grpc.WithTransportCredentials(c),
+     grpc.WithStatsHandler(zipkingrpc.NewClientHandler(tracer)) )
+```
